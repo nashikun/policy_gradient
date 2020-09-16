@@ -20,8 +20,11 @@ class DiscreteConverter:
         return self.distribution(probabilties).sample()
 
     @property
-    def is_discrete(self) -> bool:
+    def discrete(self) -> bool:
         return True
+
+    def sample(self):
+        return self.space.sample()
 
 
 class BoxConverter:
@@ -31,7 +34,7 @@ class BoxConverter:
         self.min = torch.Tensor(space.low)
 
     @property
-    def shape(self) -> Tuple[int, int, ...]:
+    def shape(self) -> Tuple[int, ...]:
         return self.space.shape
 
     def distribution(self, logits: torch.Tensor) -> D.MultivariateNormal:
@@ -45,8 +48,11 @@ class BoxConverter:
         return torch.min(self.min, torch.max(self.max, self.distribution(logits).sample()))
 
     @property
-    def is_discrete(self) -> bool:
+    def discrete(self) -> bool:
         return False
+
+    def sample(self):
+        return self.space.sample()
 
 
 def Converter(space: Space):
