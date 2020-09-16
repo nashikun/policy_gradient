@@ -1,15 +1,14 @@
-import argparse
 import gym
 import numpy as np
 
-from models.policy_gradient import PolicyGradient
+from agents.random_agent import RandomAgent
 
 
 def main():
     env = gym.make('CartPole-v1')
     episodes = 1000
     lr = 0.1
-    model = PolicyGradient(env.observation_space, env.action_space, lr)
+    model = RandomAgent(env, lr)
 
     scores = []
     for episode in range(episodes):
@@ -17,13 +16,13 @@ def main():
         state = env.reset()
 
         for time in range(1000):
-            action = model.predict(state)
+            action = model.act(state)
 
             # Uncomment to render the visual state in a window
             env.render()
 
             # Step through environment using chosen action
-            state, reward, done, _ = env.step(action.data.numpy())
+            state, reward, done, _ = env.step(action)
 
             # Save reward
             model.episode_rewards.append(reward)
@@ -47,6 +46,7 @@ def main():
     #             print("Solved after {} episodes! Running average is now {}. Last episode ran to {} time steps."
     #                   .format(episode, mean_score, time))
     #             break
+    env.close()
     return
 
 

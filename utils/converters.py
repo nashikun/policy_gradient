@@ -1,8 +1,9 @@
 from typing import Tuple
-from gym import Space
+
 import gym.spaces as spaces
-import torch.distributions as D
 import torch
+import torch.distributions as D
+from gym import Space
 
 
 class DiscreteConverter:
@@ -52,7 +53,7 @@ class BoxConverter:
         return False
 
     def sample(self):
-        return self.space.sample()
+        return torch.Tensor(self.space.sample())
 
 
 def Converter(space: Space):
