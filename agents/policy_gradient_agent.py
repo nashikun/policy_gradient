@@ -7,28 +7,22 @@ import torch.optim as optim
 from gym import Env
 
 from agents.agent import Agent
+from utils.mlp import MLP
 
 
 class PolicyGradient(Agent):
-    def __init__(self, env: Env, lr: float, gamma: float = 0.99):
+    def __init__(self, env: Env, lr: float, gamma: float = 0.99, layers=(128, 128)):
         super().__init__(env)
         self.gamma = gamma
 
         if self.action_space.discrete:
             head = nn.Softmax(dim=-1)
+            output = self.action_space.shape[0]
         else:
-            raise NotImplementedError("Implement this, dummy")
-        num_hidden = 128
+            head = None
+            output = 2 * self.action_space.shape[0]
 
-        self.model = torch.nn.Sequential(
-            nn.Linear(self.state_space.shape[0], num_hidden, bias=False),
-            nn.ReLU(),
-            nn.Linear(num_hidden, num_hidden, bias=False),
-            nn.ReLU(),
-            nn.Linear(num_hidden, self.action_space.shape[0], bias=False),
-            head
-        )
-
+        self.model = MLP(self.state_space.shape[0], output, layers, head)
         self.optimizer = optim.Adam(self.model.parameters(), lr=lr)
         self.reset()
 

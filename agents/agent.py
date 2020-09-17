@@ -1,6 +1,8 @@
+import time
 from abc import ABCMeta, abstractmethod
 from typing import Tuple
 
+import numpy as np
 import torch
 from gym import Env
 
@@ -32,22 +34,51 @@ class Agent(metaclass=ABCMeta):
 
     def train(self, n_epochs: int, n_episodes: int, n_steps: int, render: bool) -> None:
         for epoch in range(n_epochs):
+            returned_rewards = []
+            episode_steps = []
             for episode in range(n_episodes):
                 state = self.env.reset()
-
-                for time in range(n_steps):
+                ep_reward = 0
+                for step in range(n_steps):
                     action = self.act(state)
 
                     if render:
                         self.env.render()
 
                     next_state, reward, done, _ = self.env.step(action[0])
+                    ep_reward += reward
                     self.store_step(state, next_state, *action, reward)
                     state = next_state
                     if done:
                         break
                 self.store_episode()
+                returned_rewards.append(ep_reward)
+                episode_steps.append(step)
+            print(f"Epoch {epoch + 1} / {n_epochs}: Average returned reward: {np.mean(returned_rewards)}")
+            print(f"Epoch {epoch + 1} / {n_epochs}: Average episode length: {np.mean(episode_steps)}")
             self.update()
+        self.env.close()
+
+    def evaluate(self, n_episodes: int, n_steps: int, render: bool) -> None:
+        returned_rewards = []
+        for episode in range(n_episodes):
+            state = self.env.reset()
+            ep_reward = 0
+            for step in range(n_steps):
+                action = self.act(state)
+
+                if render:
+                    self.env.render()
+                    time.sleep(0.001)
+
+                next_state, reward, done, _ = self.env.step(action[0])
+                self.store_step(state, next_state, *action, reward)
+                ep_reward += reward
+                state = next_state
+                if done:
+                    break
+            returned_rewards.append(ep_reward)
+        print(f"Average reward: {np.mean(returned_rewards)}")
         self.env.close()
 
     @abstractmethod
