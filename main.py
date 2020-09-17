@@ -1,51 +1,49 @@
-import gym
-import numpy as np
+import argparse
 
-from agents.random_agent import RandomAgent
+import gym
+
+from agents.policy_gradient_agent import PolicyGradient
+
+
+def setup_parser():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--env", type=str, help="The openai gym", default="LunarLander-v2", required=False)
+    parser.add_argument("--episodes", type=int, help="The number of episodes per epoch", default=500, required=False)
+    parser.add_argument("--epochs", type=int, help="The number of epochs", default=10, required=False)
+    parser.add_argument("--lr", type=float, help="The learning rate", default=0.01, required=False)
+    parser.add_argument("--render", type=bool, help="Whether to render the agent's actions", default=True,
+                        required=False)
+    parser.add_argument("--train", type=bool, help="Whether to update the agent's model", default=True, required=False)
+    return parser
 
 
 def main():
-    env = gym.make('CartPole-v1')
-    episodes = 1000
-    lr = 0.1
-    model = RandomAgent(env, lr)
+    parser = setup_parser()
+    args = parser.parse_args()
+    env = gym.make(args.env)
+    episodes = args.episodes
+    epochs = args.epochs
+    lr = args.lr
+    render = args.render
+    train = args.train
+    model = PolicyGradient(env, lr)
 
-    scores = []
-    for episode in range(episodes):
-        # Reset environment and record the starting state
-        state = env.reset()
+    for epoch in range(epochs):
+        for episode in range(episodes):
+            state = env.reset()
 
-        for time in range(1000):
-            action = model.act(state)
+            for time in range(100):
+                action = model.act(state)
 
-            # Uncomment to render the visual state in a window
-            env.render()
+                if render:
+                    env.render()
 
-            # Step through environment using chosen action
-            state, reward, done, _ = env.step(action)
+                state, reward, done, _ = env.step(action)
+                if done:
+                    break
+            if train:
+                model.update()
 
-            # Save reward
-            model.episode_rewards.append(reward)
-            if done:
-                break
-
-        model.update()
-
-        # Calculate score to determine when the environment has been solved
-        scores.append(time)
-        mean_score = np.mean(scores[-100:])
-        mean_loss = np.mean(model.loss_history[-100:])
-
-        if episode % 50 == 0:
-            print('Episode {}\tAverage length (last 100 episodes): {:.2f}'.format(
-                episode, mean_score))
-            print('Episode {}\tAverage loss (last 100 episodes): {:.2f}'.format(
-                episode, mean_loss))
-
-    #         if mean_score > env.spec.reward_threshold:
-    #             print("Solved after {} episodes! Running average is now {}. Last episode ran to {} time steps."
-    #                   .format(episode, mean_score, time))
-    #             break
     env.close()
     return
 

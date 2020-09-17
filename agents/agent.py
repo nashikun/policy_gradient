@@ -10,7 +10,7 @@ class Agent(metaclass=ABCMeta):
     def __init__(self, env: Env, *args):
         self.env = env
         self.action_space = Converter(env.action_space)
-        self.state_space = Converter(env.action_space)
+        self.state_space = Converter(env.observation_space)
         self.episode_rewards = []
         self.loss_history = []
 

@@ -39,7 +39,7 @@ class BoxConverter:
         return self.space.shape
 
     def distribution(self, logits: torch.Tensor) -> D.MultivariateNormal:
-        assert not logits.size(1) % 2
+        assert not logits.size(0) % 2
         mid = logits.size // 2
         scale = logits[:, :mid]
         loc = logits[:, mid:]
@@ -53,7 +53,7 @@ class BoxConverter:
         return False
 
     def sample(self):
-        return torch.Tensor(self.space.sample())
+        return self.space.sample()
 
 
 def Converter(space: Space):

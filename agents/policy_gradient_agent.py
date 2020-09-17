@@ -6,21 +6,21 @@ import torch.optim as optim
 from agents.agent import Agent
 
 
-class PolicyGradient(nn.Module, Agent):
+class PolicyGradient(Agent):
     def __init__(self, env, lr, gamma=0.99):
-        super(nn.Module, self).__init__(env)
-        super(Agent, self).__init__()
+        super().__init__(env)
+        # super(nn.Module, self).__init__()
         self.gamma = gamma
 
-        if self.state_space.discrete:
+        if self.action_space.discrete:
             head = nn.Softmax(dim=-1)
         else:
-            head = nn.Sigmoid()
+            head = nn.Linear()
         num_hidden = 128
 
         self.model = torch.nn.Sequential(
             nn.Linear(self.state_space.shape[0], num_hidden, bias=False),
-            nn.Dropout(p=0.5),
+            # nn.Dropout(p=0.5),
             nn.ReLU(),
             nn.Linear(num_hidden, num_hidden, bias=False),
             nn.ReLU(),
@@ -28,7 +28,7 @@ class PolicyGradient(nn.Module, Agent):
             head
         )
 
-        self.optimizer = optim.Adam(self.parameters(), lr=lr)
+        self.optimizer = optim.Adam(self.model.parameters(), lr=lr)
 
         self.reward_history = []
         self.loss_history = []
@@ -49,7 +49,7 @@ class PolicyGradient(nn.Module, Agent):
 
         self.episode_actions = torch.cat([self.episode_actions, distribution.log_prob(action).reshape(1)])
 
-        return action
+        return action.data.numpy()
 
     def update(self):
         total_reward = 0
@@ -60,7 +60,7 @@ class PolicyGradient(nn.Module, Agent):
             rewards.insert(0, total_reward)
 
         rewards = torch.FloatTensor(rewards)
-        rewards = (rewards - rewards.mean())
+        rewards = (rewards - rewards.mean()) / (rewards.std() + np.finfo(np.float32).eps)
         loss = (torch.sum(torch.mul(self.episode_actions, rewards).mul(-1), -1))
 
         self.optimizer.zero_grad()
@@ -71,3 +71,6 @@ class PolicyGradient(nn.Module, Agent):
         self.loss_history.append(loss.item())
         self.reward_history.append(np.sum(self.episode_rewards))
         self.reset()
+
+    def train(self):
+        pass
