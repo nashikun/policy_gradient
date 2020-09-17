@@ -38,11 +38,14 @@ def main():
                 if render:
                     env.render()
 
-                state, reward, done, _ = env.step(action)
+                next_state, reward, done, _ = env.step(action[0])
+                model.store_step(state, next_state, *action, reward)
+                state = next_state
                 if done:
                     break
-            if train:
-                model.update()
+            model.store_episode()
+        if train:
+            model.update()
 
     env.close()
     return
