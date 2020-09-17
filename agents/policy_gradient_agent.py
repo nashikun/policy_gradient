@@ -1,13 +1,16 @@
+from typing import List, Tuple
+
 import numpy as np
 import torch
 import torch.nn as nn
 import torch.optim as optim
+from gym import Env
 
 from agents.agent import Agent
 
 
 class PolicyGradient(Agent):
-    def __init__(self, env, lr, gamma=0.99):
+    def __init__(self, env: Env, lr: float, gamma: float = 0.99):
         super().__init__(env)
         self.gamma = gamma
 
@@ -34,17 +37,14 @@ class PolicyGradient(Agent):
         self.episode_memory.reset()
         self.epoch_memory.reset()
 
-    def forward(self, x):
-        return self.model(x)
-
-    def act(self, state):
+    def act(self, state: List) -> Tuple:
         state = torch.from_numpy(state).type(torch.FloatTensor)
-        action_probs = self.forward(state)
+        action_probs = self.model(state)
         distribution = self.action_space.distribution(action_probs)
         action = distribution.sample()
         return action.data.numpy(), distribution.log_prob(action)
 
-    def update(self):
+    def update(self) -> None:
         loss = - torch.sum(self.reward_memory)
         self.optimizer.zero_grad()
         loss.backward()

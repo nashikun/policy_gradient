@@ -1,15 +1,18 @@
+from typing import Tuple, List
+
+
 class Memory:
-    def __init__(self, reverse=False):
+    def __init__(self, reverse: bool = False):
         self.reverse = reverse
         self._storage = []
 
-    def store(self, item):
+    def store(self, item: Tuple) -> None:
         self._storage.append(item)
 
-    def reset(self):
+    def reset(self) -> None:
         self._storage = []
 
-    def get_values(self):
+    def get_values(self) -> List:
         if self.reverse:
             return list(zip(*self._storage))
         else:

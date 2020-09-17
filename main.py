@@ -1,6 +1,7 @@
 import argparse
 
 import gym
+import matplotlib.pyplot as plt
 
 from agents.policy_gradient_agent import PolicyGradient
 
@@ -8,7 +9,7 @@ from agents.policy_gradient_agent import PolicyGradient
 def setup_parser():
     parser = argparse.ArgumentParser()
     parser.add_argument("--env", type=str, help="The openai gym", default="LunarLander-v2", required=False)
-    parser.add_argument("--episodes", type=int, help="The number of episodes per epoch", default=500, required=False)
+    parser.add_argument("--episodes", type=int, help="The number of episodes per epoch", default=50, required=False)
     parser.add_argument("--epochs", type=int, help="The number of epochs", default=10, required=False)
     parser.add_argument("--lr", type=float, help="The learning rate", default=0.01, required=False)
     parser.add_argument("--render", type=bool, help="Whether to render the agent's actions", default=True,
@@ -25,29 +26,9 @@ def main():
     epochs = args.epochs
     lr = args.lr
     render = args.render
-    train = args.train
     model = PolicyGradient(env, lr)
-
-    for epoch in range(epochs):
-        for episode in range(episodes):
-            state = env.reset()
-
-            for time in range(100):
-                action = model.act(state)
-
-                if render:
-                    env.render()
-
-                next_state, reward, done, _ = env.step(action[0])
-                model.store_step(state, next_state, *action, reward)
-                state = next_state
-                if done:
-                    break
-            model.store_episode()
-        if train:
-            model.update()
-
-    env.close()
+    model.train(n_epochs=epochs, n_episodes=episodes, n_steps=100, render=render)
+    plt.plot(model.loss_history)
     return
 
 

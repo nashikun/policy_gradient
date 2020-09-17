@@ -11,7 +11,7 @@ class DiscreteConverter:
         self.space = space
 
     @property
-    def shape(self) -> Tuple[int,]:
+    def shape(self) -> Tuple[int, ...]:
         return (self.space.n,)
 
     def distribution(self, probabilities: torch.Tensor) -> D.Categorical:
