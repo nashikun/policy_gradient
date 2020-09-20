@@ -1,5 +1,6 @@
 import time
 from abc import ABCMeta, abstractmethod
+from typing import Optional
 from typing import Tuple
 
 import numpy as np
@@ -15,21 +16,16 @@ class Agent(metaclass=ABCMeta):
         self.env = env
         self.action_space = Converter(env.action_space)
         self.state_space = Converter(env.observation_space)
-        self.epoch_memory = Memory()
-        self.episode_memory = Memory(reverse=True)
-        self.reward_memory = torch.tensor([])
-        self.reward_history = []
-        self.loss_history = []
-        self.episode_length = []
+        self.epoch_memory: Optional[Memory] = None
+        self.episode_memory: Optional[Memory] = None
+        self.setup_memory()
 
     def store_step(self, *args):
         self.episode_memory.store(args)
 
     def store_episode(self) -> None:
-        episode = self.episode_memory.get_values()
-        rewards = self.cumulate_rewards(episode[3:])
-        self.reward_memory = torch.cat([self.reward_memory, rewards])
-        self.epoch_memory.store(episode[:3])
+        self.cumulate_rewards()
+        self.epoch_memory.extend(self.episode_memory)
         self.episode_memory.reset()
 
     def train(self, n_epochs: int, n_episodes: int, n_steps: int, render: bool) -> None:
@@ -47,13 +43,14 @@ class Agent(metaclass=ABCMeta):
 
                     next_state, reward, done, _ = self.env.step(action[0])
                     ep_reward += reward
-                    self.store_step(state, next_state, *action, reward)
-                    state = next_state
-                    if done:
+                    if not done:
+                        self.store_step(state, next_state, *action, reward)
+                        state = next_state
+                    else:
                         break
                 self.store_episode()
                 returned_rewards.append(ep_reward)
-                episode_steps.append(step)
+                episode_steps.append(step + 1)
             print(f"Epoch {epoch + 1} / {n_epochs}: Average returned reward: {np.mean(returned_rewards)}")
             print(f"Epoch {epoch + 1} / {n_epochs}: Average episode length: {np.mean(episode_steps)}")
             self.update()
@@ -82,7 +79,7 @@ class Agent(metaclass=ABCMeta):
         self.env.close()
 
     @abstractmethod
-    def cumulate_rewards(self, rewards: list) -> None:
+    def cumulate_rewards(self, inputs: list) -> None:
         raise NotImplementedError("Not implemented")
 
     @abstractmethod
@@ -91,4 +88,8 @@ class Agent(metaclass=ABCMeta):
 
     @abstractmethod
     def update(self) -> None:
+        raise NotImplementedError("Not implemented")
+
+    @abstractmethod
+    def setup_memory(self) -> None:
         raise NotImplementedError("Not implemented")

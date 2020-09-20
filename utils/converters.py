@@ -39,10 +39,10 @@ class BoxConverter:
         return self.space.shape
 
     def distribution(self, logits: torch.Tensor) -> D.MultivariateNormal:
-        assert not logits.size(0) % 2
-        mid = logits.size // 2
-        scale = logits[:, :mid]
-        loc = logits[:, mid:]
+        scale = logits  # [:-1]
+        loc = torch.eye(self.shape[0]) * 0.01
+        # loc = torch.eye(logits.size(0) - 1) * logits[-1]
+        # loc = loc * loc + torch.finfo(torch.float32).eps
         return D.MultivariateNormal(scale, loc)
 
     def action(self, logits: torch.Tensor) -> torch.Tensor:
