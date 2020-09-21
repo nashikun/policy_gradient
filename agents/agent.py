@@ -18,15 +18,24 @@ class Agent(metaclass=ABCMeta):
         self.state_space = Converter(env.observation_space)
         self.epoch_memory: Optional[Memory] = None
         self.episode_memory: Optional[Memory] = None
+        self.epoch_episodes: int = 0
         self.setup_memory()
 
     def store_step(self, *args):
         self.episode_memory.store(args)
 
     def store_episode(self) -> None:
+        self.epoch_episodes += 1
+        # self.episode_memory.normalize_columns(["rewards"])
         self.cumulate_rewards()
         self.epoch_memory.extend(self.episode_memory)
         self.episode_memory.reset()
+        self.epoch_episodes += 1
+
+    def reset(self):
+        self.epoch_episodes = 0
+        self.episode_memory.reset()
+        self.epoch_memory.reset()
 
     def train(self, n_epochs: int, n_episodes: int, n_steps: int, render: bool) -> None:
         for epoch in range(n_epochs):
@@ -78,9 +87,15 @@ class Agent(metaclass=ABCMeta):
         print(f"Average reward: {np.mean(returned_rewards)}")
         self.env.close()
 
-    @abstractmethod
-    def cumulate_rewards(self, inputs: list) -> None:
-        raise NotImplementedError("Not implemented")
+    def cumulate_rewards(self):
+        cumulated_reward = 0
+        cumulated_rewards = []
+        log_probs, rewards = self.episode_memory.get_columns(["log_probs", "rewards"])
+        for i in range(len(rewards) - 1, -1, -1):
+            cumulated_reward = self.gamma * cumulated_reward + rewards[i]
+            cumulated_rewards.append(cumulated_reward)
+        cumulated_rewards = torch.Tensor(cumulated_rewards[::-1])
+        self.episode_memory.extend_column("cumulated_rewards", cumulated_rewards)
 
     @abstractmethod
     def act(self, state: torch.Tensor) -> Tuple:

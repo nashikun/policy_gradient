@@ -7,6 +7,7 @@ import torch.optim as optim
 from gym import Env
 
 from agents.agent import Agent
+from utils.memory import Memory
 from utils.mlp import MLP
 
 
@@ -26,10 +27,12 @@ class ActorCritic(Agent):
         self.value_optimizer = optim.Adam(self.value_model.parameters(), lr=lr)
         self.value_loss = nn.MSELoss()
         self.reset()
+        self.counter = 10
 
-    def reset(self):
-        self.episode_memory.reset()
-        self.epoch_memory.reset()
+    def setup_memory(self) -> None:
+        columns = ["states", "next_states", "actions", "log_probs", "rewards"]
+        self.episode_memory = Memory(columns)
+        self.epoch_memory = Memory(columns)
 
     def act(self, state: List) -> Tuple:
         state = torch.from_numpy(state).type(torch.FloatTensor)
@@ -39,39 +42,19 @@ class ActorCritic(Agent):
         return action.data.numpy(), distribution.log_prob(action)
 
     def update(self) -> None:
-        states, next_states, _, _, rewards = self.epoch_memory.get_values(reverse=True)
-        with torch.no_grad():
-            target = rewards + self.gamma * self.value_model(torch.Tensor(next_states))
-        values = self.value_model(states)
-        value_loss = self.value_loss(values, target)
-        policy_loss = - torch.sum()
-        self.policy_optimizer.zero_grad()
+        states, next_states, rewards, cumulated_rewards, log_probs = self.epoch_memory.get_columns(["states", "next_states", "rewards", "cumulated_rewards", "log_probs"])
+        values = self.value_model(torch.Tensor(states)).squeeze()
+        value_loss = self.value_loss(values, torch.stack(cumulated_rewards))
         self.value_optimizer.zero_grad()
-        policy_loss.backward()
         value_loss.backward()
-        self.policy_optimizer.step()
         self.value_optimizer.step()
+        self.counter -= 1
+        if self.counter > 0:
+            policy_loss = - torch.sum(torch.mul(torch.stack(log_probs), torch.stack(cumulated_rewards)))
+        else:
+            advantages = torch.Tensor(rewards) + (self.gamma * self.value_model(torch.Tensor(next_states)) - self.value_model(torch.Tensor(states))).squeeze()
+            policy_loss = - torch.sum(torch.mul(torch.stack(log_probs), advantages))
+        self.policy_optimizer.zero_grad()
+        policy_loss.backward()
+        self.policy_optimizer.step()
         self.reset()
-
-    def cumulate_rewards(self, input: List):
-        states, _, _, log_probs, rewards = list(zip(*input))
-
-        rewards = (rewards - rewards.mean()) / (
-                rewards.std() + np.finfo(np.float32).eps)
-        with torch.no_grad():
-            values = self.value_model(torch.Tensor(states)).T
-        results = torch.mul(values, torch.stack(log_probs)).T
-        return results
-
-    def get_rewards(self, inputs: list):
-        cumulated_reward = 0
-        cumulated_rewards = []
-        log_probs, rewards = list(zip(*inputs))[-2:]
-        for i in range(len(rewards) - 1, -1, -1):
-            cumulated_reward = self.gamma * cumulated_reward + rewards[i]
-            cumulated_rewards.append(cumulated_reward)
-        cumulated_rewards = torch.Tensor(cumulated_rewards[::-1])
-        cumulated_rewards = (cumulated_rewards - cumulated_rewards.mean()) / (
-                cumulated_rewards.std() + np.finfo(np.float32).eps)
-        results = torch.mul(cumulated_rewards, torch.stack(log_probs))
-        return results

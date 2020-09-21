@@ -1,5 +1,6 @@
 from collections import defaultdict
 from typing import List, Iterable
+import numpy as np
 
 
 class Memory:
@@ -31,3 +32,10 @@ class Memory:
 
     def get_columns(self, columns):
         return [self._storage[column] for column in columns]
+
+    def normalize_columns(self, columns):
+        for col in columns:
+            mean = np.mean(self._storage[col])
+            std = np.std(self._storage[col]) + np.finfo(float).eps
+            self._storage[col] -= mean
+            self._storage[col] /= std
