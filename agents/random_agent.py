@@ -7,7 +7,7 @@ from agents.agent import Agent
 
 class RandomAgent(Agent):
 
-    def cumulate_rewards(self, rewards: list) -> None:
+    def setup_memory(self) -> None:
         pass
 
     def act(self, state: torch.Tensor) -> Tuple:
