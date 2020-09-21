@@ -1,4 +1,5 @@
 from typing import List, Tuple
+
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -44,3 +45,10 @@ class PolicyGradient(Agent):
         loss.backward()
         self.optimizer.step()
         self.reset()
+
+    def save(self, model_path):
+        self.model.save(model_path)
+
+    def load(self, model_path):
+        self.model.load_state_dict(torch.load(model_path))
+        self.model.eval()

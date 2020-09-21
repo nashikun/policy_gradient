@@ -108,3 +108,7 @@ class Agent(metaclass=ABCMeta):
     @abstractmethod
     def setup_memory(self) -> None:
         raise NotImplementedError("Not implemented")
+
+    @abstractmethod
+    def save(self, *args):
+        raise NotImplementedError("Not Implemented")

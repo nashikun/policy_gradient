@@ -11,7 +11,16 @@ class RandomAgent(Agent):
         pass
 
     def act(self, state: torch.Tensor) -> Tuple:
-        return self.action_space.sample()
+        return self.action_space.sample(),
 
     def update(self):
+        pass
+
+    def save(self):
+        pass
+
+    def store_step(self, *args):
+        pass
+
+    def store_episode(self):
         pass

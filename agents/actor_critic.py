@@ -1,4 +1,5 @@
 from typing import List, Tuple
+
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -58,7 +59,7 @@ class ActorCritic(Agent):
             self.value_optimizer.zero_grad()
             value_loss.backward()
             self.value_optimizer.step()
-        print(f"Volicy Loss: {value_loss.item()}")
+        print(f"Value Loss: {value_loss.item()}")
         # Compute the policy loss using th previous value function
         policy_loss = - torch.sum(torch.mul(torch.stack(log_probs), advantages))
         policy_loss /= self.epoch_episodes
@@ -67,3 +68,13 @@ class ActorCritic(Agent):
         policy_loss.backward()
         self.policy_optimizer.step()
         self.reset()
+
+    def save(self, policy_path, value_path):
+        self.policy_model.save(policy_path)
+        self.value_model.save(value_path)
+
+    def load(self, policy_path, value_path):
+        self.policy_model.load_state_dict(torch.load(policy_path))
+        self.value_model.load_state_dict(torch.load(value_path))
+        self.policy_model.eval()
+        self.value_model.eval()
