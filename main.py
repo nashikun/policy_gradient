@@ -4,6 +4,7 @@ import ast
 import gym
 
 from agents.actor_critic import ActorCritic
+from agents.generalized_advantage_estimation import GeneralizedAdvantageEstimation
 from agents.policy_gradient_agent import PolicyGradient
 from agents.random_agent import RandomAgent
 
@@ -13,6 +14,7 @@ def setup_parser():
     parser.add_argument('--env', type=str, help="The openai gym", default="LunarLander-v2", required=False)
     parser.add_argument('--episodes', type=int, help="The number of episodes per epoch", default=50, required=False)
     parser.add_argument('--epochs', type=int, help="The number of epochs", default=30, required=False)
+    parser.add_argument('--steps', type=int, help="The number of steps", default=300, required=False)
     parser.add_argument('--render', type=ast.literal_eval, help="Whether to render the environment", default=True,
                         required=False)
     parser.add_argument('--train', type=ast.literal_eval, help="Whether to update the agent's model", default=True,
@@ -44,28 +46,31 @@ def setup_parser():
                                default="./ac_value_model.h5", required=False)
     actor_critic = subparsers.add_parser("ac", parents=[ac_age_parent])
     age_agent = subparsers.add_parser("age", parents=[ac_age_parent])
-    age_agent.add_argument('--falloff', type=float, default=0.99, required=False)
+    age_agent.add_argument('--falloff', type=float, default=0.97, required=False)
     return parser
 
 
 def get_configs(args):
-    if args.model_type == "pg":
+    if args.model == "pg":
         model_config = {"lr": args.lr, "layers": args.layers, "verbose": args.verbose}
         load_config = {"model_path": args.model_path}
         save_config = {"model_path": args.model_path}
-    elif args.model_type in ["age", "ac"]:
+    elif args.model in ["age", "ac"]:
         model_config = {"policy_lr": args.policy_lr, "value_lr": args.value_lr, "policy_layers": args.policy_layers,
                         "value_layers": args.value_layers, "value_iter": args.value_iter, "verbose": args.verbose}
-        load_config = {"policy_model_path": args.policy_model_path, "value_model_path": args.value_model_path}
-        save_config = {"model_path": args.model_path}
-    elif args.model_type == "rnd":
+        load_config = {"policy_path": args.policy_model_path, "value_path": args.value_model_path}
+        save_config = {"policy_path": args.policy_model_path, "value_path": args.value_model_path}
+        if args.model == "age":
+            model_config["falloff"] = args.falloff
+    elif args.model == "rnd":
         model_config = {}
         load_config = {}
         save_config = {}
     else:
         raise ValueError("Unknown model")
 
-    train_config = {}
+    train_config = {"n_epochs": args.epochs, "n_episodes": args.episodes, "n_steps": args.steps,
+                    "render": args.render}
 
     return model_config, train_config, load_config, save_config
 
@@ -84,6 +89,8 @@ def main():
         model = PolicyGradient(env, **model_config)
     elif model_type == "ac":
         model = ActorCritic(env, **model_config)
+    elif model_type == "age":
+        model = GeneralizedAdvantageEstimation(env, **model_config)
     elif model_type == "rnd":
         model = RandomAgent(env, **model_config)
 
