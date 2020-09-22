@@ -22,3 +22,6 @@ class MLP(nn.Module):
             return self.head(self.model[-1](x))
         else:
             return self.model[-1](x)
+
+    def save(self, path):
+        self

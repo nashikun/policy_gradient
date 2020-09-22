@@ -12,8 +12,10 @@ from utils.memory import Memory
 
 
 class Agent(metaclass=ABCMeta):
-    def __init__(self, env: Env, *args):
+    def __init__(self, env: Env, verbose=False, *args):
         self.env = env
+        self.verbose = verbose
+        self.schedulers = []
         self.action_space = Converter(env.action_space)
         self.state_space = Converter(env.observation_space)
         self.epoch_memory: Optional[Memory] = None
@@ -24,7 +26,7 @@ class Agent(metaclass=ABCMeta):
     def store_step(self, *args):
         self.episode_memory.store(args)
 
-    def store_episode(self) -> None:
+    def end_episode(self) -> None:
         self.epoch_episodes += 1
         self.episode_memory.normalize_columns(["rewards"])
         self.cumulate_rewards()
@@ -38,6 +40,7 @@ class Agent(metaclass=ABCMeta):
         self.epoch_memory.reset()
 
     def train(self, n_epochs: int, n_episodes: int, n_steps: int, render: bool) -> None:
+        self.setup_schedulers(n_epochs)
         for epoch in range(n_epochs):
             returned_rewards = []
             episode_steps = []
@@ -57,12 +60,17 @@ class Agent(metaclass=ABCMeta):
                         state = next_state
                     else:
                         break
-                self.store_episode()
+                self.end_episode()
                 returned_rewards.append(ep_reward)
                 episode_steps.append(step + 1)
-            print(f"Epoch {epoch + 1} / {n_epochs}: Average returned reward: {np.mean(returned_rewards)}")
-            print(f"Epoch {epoch + 1} / {n_epochs}: Average episode length: {np.mean(episode_steps)}")
+            print("-" * 100 + f"\nEpoch {epoch + 1} / {n_epochs}: ")
+            print(f"Average returned reward: {np.mean(returned_rewards)}")
+            print(f"Average episode length: {np.mean(episode_steps)}")
             self.update()
+            for idx, scheduler in enumerate(self.schedulers):
+                scheduler.step()
+                if self.verbose:
+                    print(f"Scheduler {idx+1}: {scheduler.get_lr()}")
         self.env.close()
 
     def evaluate(self, n_episodes: int, n_steps: int, render: bool) -> None:
@@ -75,7 +83,7 @@ class Agent(metaclass=ABCMeta):
 
                 if render:
                     self.env.render()
-                    time.sleep(0.001)
+                    time.sleep(0.01)
 
                 next_state, reward, done, _ = self.env.step(action[0])
                 self.store_step(state, next_state, *action, reward)
@@ -87,15 +95,9 @@ class Agent(metaclass=ABCMeta):
         print(f"Average reward: {np.mean(returned_rewards)}")
         self.env.close()
 
+    @abstractmethod
     def cumulate_rewards(self):
-        cumulated_reward = 0
-        cumulated_rewards = []
-        rewards, = self.episode_memory.get_columns(["rewards"])
-        for i in range(len(rewards) - 1, -1, -1):
-            cumulated_reward = self.gamma * cumulated_reward + rewards[i]
-            cumulated_rewards.append(cumulated_reward)
-        cumulated_rewards = torch.Tensor(cumulated_rewards[::-1])
-        self.episode_memory.extend_column("cumulated_rewards", cumulated_rewards)
+        raise NotImplementedError("Not implemented")
 
     @abstractmethod
     def act(self, state: torch.Tensor) -> Tuple:
@@ -107,6 +109,10 @@ class Agent(metaclass=ABCMeta):
 
     @abstractmethod
     def setup_memory(self) -> None:
+        raise NotImplementedError("Not implemented")
+
+    @abstractmethod
+    def setup_schedulers(self, n_epochs: int) -> None:
         raise NotImplementedError("Not implemented")
 
     @abstractmethod

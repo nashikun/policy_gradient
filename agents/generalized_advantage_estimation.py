@@ -11,7 +11,7 @@ from utils.memory import Memory
 from utils.mlp import MLP
 
 
-class ActorCritic(Agent):
+class GeneralizedAdvantageEstimation(Agent):
     def __init__(self, env: Env, policy_lr: float, value_lr: float, gamma: float = 0.99, value_iter=50,
                  policy_layers=(128, 128), value_layers=(128, 128), verbose=False):
         super().__init__(env, verbose)
@@ -44,7 +44,7 @@ class ActorCritic(Agent):
 
     def update(self) -> None:
         states, next_states, rewards, cumulated_rewards, log_probs = self.epoch_memory.get_columns(
-            ["states", "next_states", "rewards", "cumulated_rewards", "log_probs"])
+            ["states", "next_states", "rewards", "cumulated_advantages", "log_probs"])
         # Compute the advantge for the previous Value function
         with torch.no_grad():
             advantages = torch.Tensor(rewards) + (
@@ -79,17 +79,19 @@ class ActorCritic(Agent):
         self.value_model.eval()
 
     def setup_schedulers(self, n_epochs: int):
-        policy_scheduler = CosineAnnealingLR(self.policy_optimizer, n_epochs, eta_min=0.01)
-        value_scheduler = CosineAnnealingLR(self.value_optimizer, n_epochs, eta_min=0.01)
+        policy_scheduler = CosineAnnealingLR(self.policy_optimizer, n_epochs, eta_min=0)
+        value_scheduler = CosineAnnealingLR(self.value_optimizer, n_epochs, eta_min=0)
         self.schedulers.append(policy_scheduler)
         self.schedulers.append(value_scheduler)
 
     def cumulate_rewards(self):
-        cumulated_reward = 0
-        cumulated_rewards = []
-        rewards, = self.episode_memory.get_columns(["rewards"])
+        rewards, states, next_states = self.episode_memory.get_columns(["rewards", "states", "next_states"])
+        with torch.no_grad():
+            advantges = rewards + self.gamma * self.value_model(next_states) - self.value_model(states)
+        cumulated_advantage = 0
+        cumulated_advantages = []
         for i in range(len(rewards) - 1, -1, -1):
-            cumulated_reward = self.gamma * cumulated_reward + rewards[i]
-            cumulated_rewards.append(cumulated_reward)
-        cumulated_rewards = torch.Tensor(cumulated_rewards[::-1])
-        self.episode_memory.extend_column("cumulated_rewards", cumulated_rewards)
+            cumulated_advantage = self.gamma * cumulated_advantage + advantges[i]
+            cumulated_advantages.append(cumulated_advantage)
+        cumulated_advantages = torch.Tensor(cumulated_advantages[::-1])
+        self.episode_memory.extend_column("cumulated_advantages", cumulated_advantages)

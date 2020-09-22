@@ -7,9 +7,6 @@ from agents.agent import Agent
 
 class RandomAgent(Agent):
 
-    def setup_memory(self) -> None:
-        pass
-
     def act(self, state: torch.Tensor) -> Tuple:
         return self.action_space.sample(),
 
@@ -22,5 +19,14 @@ class RandomAgent(Agent):
     def store_step(self, *args):
         pass
 
-    def store_episode(self):
+    def end_episode(self):
+        pass
+
+    def setup_schedulers(self, n_epochs: int):
+        pass
+
+    def cumulate_rewards(self):
+        pass
+
+    def setup_memory(self) -> None:
         pass

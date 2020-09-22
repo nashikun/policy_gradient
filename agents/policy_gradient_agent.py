@@ -4,6 +4,7 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 from gym import Env
+from torch.optim.lr_scheduler import CosineAnnealingLR
 
 from agents.agent import Agent
 from utils.memory import Memory
@@ -11,8 +12,8 @@ from utils.mlp import MLP
 
 
 class PolicyGradient(Agent):
-    def __init__(self, env: Env, lr: float, gamma: float = 0.99, layers=(128, 128)):
-        super().__init__(env)
+    def __init__(self, env: Env, lr: float, gamma: float = 0.99, layers=(128, 128), verbose=False):
+        super().__init__(env, verbose)
         self.gamma = gamma
 
         if self.action_space.discrete:
@@ -47,8 +48,22 @@ class PolicyGradient(Agent):
         self.reset()
 
     def save(self, model_path):
-        self.model.save(model_path)
+        torch.save(self.model.state_dict(), model_path)
 
     def load(self, model_path):
         self.model.load_state_dict(torch.load(model_path))
         self.model.eval()
+
+    def setup_schedulers(self, n_epochs: int):
+        scheduler = CosineAnnealingLR(self.optimizer, n_epochs, 0.01)
+        self.schedulers.append(scheduler)
+
+    def cumulate_rewards(self):
+        cumulated_reward = 0
+        cumulated_rewards = []
+        rewards, = self.episode_memory.get_columns(["rewards"])
+        for i in range(len(rewards) - 1, -1, -1):
+            cumulated_reward = self.gamma * cumulated_reward + rewards[i]
+            cumulated_rewards.append(cumulated_reward)
+        cumulated_rewards = torch.Tensor(cumulated_rewards[::-1])
+        self.episode_memory.extend_column("cumulated_rewards", cumulated_rewards)
