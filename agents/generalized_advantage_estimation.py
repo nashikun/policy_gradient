@@ -12,10 +12,11 @@ from utils.mlp import MLP
 
 
 class GeneralizedAdvantageEstimation(Agent):
-    def __init__(self, env: Env, policy_lr: float, value_lr: float, gamma: float = 0.99, value_iter=50,
+    def __init__(self, env: Env, policy_lr: float, value_lr: float, gamma: float = 0.99, falloff=0.99, value_iter=50,
                  policy_layers=(128, 128), value_layers=(128, 128), verbose=False):
         super().__init__(env, verbose)
         self.gamma = gamma
+        self.falloff = falloff
 
         if self.action_space.discrete:
             policy_head = nn.Softmax(dim=-1)
@@ -43,24 +44,20 @@ class GeneralizedAdvantageEstimation(Agent):
         return action.data.numpy(), distribution.log_prob(action)
 
     def update(self) -> None:
-        states, next_states, rewards, cumulated_rewards, log_probs = self.epoch_memory.get_columns(
+        states, next_states, rewards, cumulated_advantages, log_probs = self.epoch_memory.get_columns(
             ["states", "next_states", "rewards", "cumulated_advantages", "log_probs"])
-        # Compute the advantge for the previous Value function
-        with torch.no_grad():
-            advantages = torch.Tensor(rewards) + (
-                    self.gamma * self.value_model(torch.Tensor(next_states)) - self.value_model(
-                torch.Tensor(states))).squeeze()
 
         # Train the value function a cetrain number of iterations
         for _ in range(self.value_iter):
             values = self.value_model(torch.Tensor(states)).squeeze()
-            value_loss = self.value_loss(values, torch.stack(cumulated_rewards))
+            value_loss = self.value_loss(values, torch.stack(cumulated_advantages))
             self.value_optimizer.zero_grad()
             value_loss.backward()
             self.value_optimizer.step()
+
         print(f"Value Loss: {value_loss.item()}")
         # Compute the policy loss using th previous value function
-        policy_loss = - torch.sum(torch.mul(torch.stack(log_probs), advantages))
+        policy_loss = - torch.sum(torch.mul(torch.stack(log_probs), torch.stack(cumulated_advantages)))
         policy_loss /= self.epoch_episodes
         print(f"Policy Loss: {policy_loss.item()}")
         self.policy_optimizer.zero_grad()
@@ -87,11 +84,11 @@ class GeneralizedAdvantageEstimation(Agent):
     def cumulate_rewards(self):
         rewards, states, next_states = self.episode_memory.get_columns(["rewards", "states", "next_states"])
         with torch.no_grad():
-            advantges = rewards + self.gamma * self.value_model(next_states) - self.value_model(states)
+            advantages = torch.Tensor(rewards) + self.gamma * (
+                    self.value_model(torch.Tensor(next_states)) - self.value_model(torch.Tensor(states))).squeeze()
         cumulated_advantage = 0
         cumulated_advantages = []
-        for i in range(len(rewards) - 1, -1, -1):
-            cumulated_advantage = self.gamma * cumulated_advantage + advantges[i]
+        for i in range(len(advantages) - 1, -1, -1):
+            cumulated_advantage = self.falloff * self.gamma * cumulated_advantage + advantages[i]
             cumulated_advantages.append(cumulated_advantage)
-        cumulated_advantages = torch.Tensor(cumulated_advantages[::-1])
-        self.episode_memory.extend_column("cumulated_advantages", cumulated_advantages)
+        self.episode_memory.extend_column("cumulated_advantages", cumulated_advantages[::-1])

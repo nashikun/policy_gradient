@@ -91,5 +91,4 @@ class ActorCritic(Agent):
         for i in range(len(rewards) - 1, -1, -1):
             cumulated_reward = self.gamma * cumulated_reward + rewards[i]
             cumulated_rewards.append(cumulated_reward)
-        cumulated_rewards = torch.Tensor(cumulated_rewards[::-1])
-        self.episode_memory.extend_column("cumulated_rewards", cumulated_rewards)
+        self.episode_memory.extend_column("cumulated_rewards", cumulated_rewards[::-1])
