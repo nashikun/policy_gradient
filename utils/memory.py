@@ -1,5 +1,6 @@
 from collections import defaultdict
 from typing import List, Iterable
+
 import numpy as np
 
 
@@ -32,6 +33,17 @@ class Memory:
 
     def get_columns(self, columns):
         return [self._storage[column] for column in columns]
+
+    def get_batch(self, columns, batch=None):
+        column_batches = self.get_columns(columns)
+        if not batch:
+            yield [column_batches]
+        else:
+            n = len(column_batches[0])
+            for i in range(n // batch):
+                yield [col[i * batch: (i + 1) * batch] for col in column_batches]
+            if n % batch:
+                yield [col[(n // batch) * batch:] for col in column_batches]
 
     def normalize_columns(self, columns):
         for col in columns:

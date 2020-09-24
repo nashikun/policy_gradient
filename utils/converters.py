@@ -38,12 +38,12 @@ class BoxConverter:
     def shape(self) -> Tuple[int, ...]:
         return self.space.shape
 
-    def distribution(self, logits: torch.Tensor) -> D.MultivariateNormal:
+    def distribution(self, logits: torch.Tensor) -> D.Normal:
         scale = logits  # [:-1]
-        loc = torch.eye(self.shape[0]) * 0.01
+        loc = torch.ones_like(logits) * 0.01
         # loc = torch.eye(logits.size(0) - 1) * logits[-1]
         # loc = loc * loc + torch.finfo(torch.float32).eps
-        return D.MultivariateNormal(scale, loc)
+        return D.Normal(scale, loc)
 
     def action(self, logits: torch.Tensor) -> torch.Tensor:
         return torch.min(self.min, torch.max(self.max, self.distribution(logits).sample()))

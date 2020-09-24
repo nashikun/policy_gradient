@@ -1,7 +1,10 @@
 import argparse
 import ast
+from typing import List
 
 import gym
+import matplotlib.pyplot as plt
+import pandas as pd
 
 from agents.actor_critic import ActorCritic
 from agents.generalized_advantage_estimation import GeneralizedAdvantageEstimation
@@ -9,11 +12,11 @@ from agents.policy_gradient_agent import PolicyGradient
 from agents.random_agent import RandomAgent
 
 
-def setup_parser():
+def setup_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser()
     parser.add_argument('--env', type=str, help="The openai gym", default="LunarLander-v2", required=False)
     parser.add_argument('--episodes', type=int, help="The number of episodes per epoch", default=50, required=False)
-    parser.add_argument('--epochs', type=int, help="The number of epochs", default=30, required=False)
+    parser.add_argument('--epochs', type=int, help="The number of epochs", default=50, required=False)
     parser.add_argument('--steps', type=int, help="The number of steps", default=300, required=False)
     parser.add_argument('--render', type=ast.literal_eval, help="Whether to render the environment", default=True,
                         required=False)
@@ -23,7 +26,7 @@ def setup_parser():
                         required=False)
     parser.add_argument('--save', type=ast.literal_eval, help="Whether to save the model", default=True,
                         required=False)
-    parser.add_argument('--load', type=ast.literal_eval, help="Whether to load the model", default=False,
+    parser.add_argument('--load', type=ast.literal_eval, help="Whether to load the model", default=True,
                         required=False)
     parser.add_argument('--verbose', type=ast.literal_eval, help="Whether to print extra details", default=False,
                         required=False)
@@ -34,45 +37,55 @@ def setup_parser():
     policy_gradient.add_argument('--layers', nargs='+', type=int, default=[128, 128])
     policy_gradient.add_argument('--model_path', type=str, help="The model path", default="./pg_model.h5",
                                  required=False)
-    ac_age_parent = argparse.ArgumentParser(add_help=False)
-    ac_age_parent.add_argument('--value_iter', type=int, default=50)
-    ac_age_parent.add_argument('--policy_lr', type=float, help="The policy learning rate", default=0.01, required=False)
-    ac_age_parent.add_argument('--value_lr', type=float, help="The value learning rate", default=0.05, required=False)
-    ac_age_parent.add_argument('--policy_layers', nargs='+', type=int, default=[128, 128])
-    ac_age_parent.add_argument('--value_layers', nargs='+', type=int, default=[128, 128])
-    ac_age_parent.add_argument('--policy_model_path', type=str, help="The policy model path",
+    ac_gae_parent = argparse.ArgumentParser(add_help=False)
+    ac_gae_parent.add_argument('--value_iter', type=int, default=50)
+    ac_gae_parent.add_argument('--policy_lr', type=float, help="The policy learning rate", default=0.01, required=False)
+    ac_gae_parent.add_argument('--value_lr', type=float, help="The value learning rate", default=0.05, required=False)
+    ac_gae_parent.add_argument('--policy_layers', nargs='+', type=int, default=[128, 128])
+    ac_gae_parent.add_argument('--value_layers', nargs='+', type=int, default=[128, 128])
+    ac_gae_parent.add_argument('--policy_model_path', type=str, help="The policy model path",
                                default="./ac_policy_model.h5", required=False)
-    ac_age_parent.add_argument('--value_model_path', type=str, help="The value model path",
+    ac_gae_parent.add_argument('--value_model_path', type=str, help="The value model path",
                                default="./ac_value_model.h5", required=False)
-    actor_critic = subparsers.add_parser("ac", parents=[ac_age_parent])
-    age_agent = subparsers.add_parser("age", parents=[ac_age_parent])
-    age_agent.add_argument('--falloff', type=float, default=0.97, required=False)
+    actor_critic = subparsers.add_parser("ac", parents=[ac_gae_parent])
+    gae_agent = subparsers.add_parser("gae", parents=[ac_gae_parent])
+    gae_agent.add_argument('--falloff', type=float, default=0.97, required=False)
     return parser
 
 
 def get_configs(args):
     if args.model == "pg":
-        model_config = {"lr": args.lr, "layers": args.layers, "verbose": args.verbose}
+        model_config = {"lr": args.lr, "layers": args.layers, "verbose": args.verbose, "save": args.save,
+                        "model_path": args.model_path}
         load_config = {"model_path": args.model_path}
-        save_config = {"model_path": args.model_path}
-    elif args.model in ["age", "ac"]:
+    elif args.model in ["gae", "ac"]:
         model_config = {"policy_lr": args.policy_lr, "value_lr": args.value_lr, "policy_layers": args.policy_layers,
-                        "value_layers": args.value_layers, "value_iter": args.value_iter, "verbose": args.verbose}
+                        "value_layers": args.value_layers, "value_iter": args.value_iter, "verbose": args.verbose,
+                        "save": args.save, "policy_path": args.policy_model_path, "value_path": args.value_model_path}
         load_config = {"policy_path": args.policy_model_path, "value_path": args.value_model_path}
-        save_config = {"policy_path": args.policy_model_path, "value_path": args.value_model_path}
-        if args.model == "age":
+        if args.model == "gae":
             model_config["falloff"] = args.falloff
     elif args.model == "rnd":
         model_config = {}
         load_config = {}
-        save_config = {}
     else:
         raise ValueError("Unknown model")
 
     train_config = {"n_epochs": args.epochs, "n_episodes": args.episodes, "n_steps": args.steps,
                     "render": args.render}
 
-    return model_config, train_config, load_config, save_config
+    return model_config, train_config, load_config
+
+
+def plot_uncertainty(input_series: List[float]):
+    fig, ax = plt.subplots()
+    steps = list(range(len(input_series) - 100))
+    series = pd.Series(input_series).rolling(100)
+    means = series.mean()[100:]
+    stds = series.std()[100:]
+    ax.plot(steps, means)
+    ax.fill_between(steps, means - stds, means + stds, alpha=0.5)
+    plt.show()
 
 
 def main():
@@ -83,26 +96,25 @@ def main():
     if not model_type:
         raise ValueError("Please specify the model")
 
-    model_config, train_config, load_config, save_config = get_configs(args)
+    model_config, train_config, load_config = get_configs(args)
 
     if model_type == "pg":
         model = PolicyGradient(env, **model_config)
     elif model_type == "ac":
         model = ActorCritic(env, **model_config)
-    elif model_type == "age":
+    elif model_type == "gae":
         model = GeneralizedAdvantageEstimation(env, **model_config)
     elif model_type == "rnd":
         model = RandomAgent(env, **model_config)
 
     if args.load:
-        model.load(**load_config)
+        model.load_model(**load_config)
     if args.train:
-        model.train(**train_config)
-    if args.save:
-        model.save(**save_config)
-
+        reward_history = model.train(**train_config)
+        plot_uncertainty(reward_history)
     if args.evaluate:
         model.evaluate(n_episodes=10, n_steps=1000, render=args.render)
+        # plot_uncertainty(evaluation_results)
     # plt.plot(model.loss_history)
 
 

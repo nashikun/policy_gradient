@@ -12,10 +12,11 @@ from utils.mlp import MLP
 
 
 class PolicyGradient(Agent):
-    def __init__(self, env: Env, lr: float, gamma: float = 0.99, layers=(128, 128), verbose=False):
-        super().__init__(env, verbose)
+    def __init__(self, env: Env, lr: float, gamma: float = 0.99, layers=(128, 128), verbose=False, model_path=None,
+                 save=False):
+        super().__init__(env, verbose, save)
         self.gamma = gamma
-
+        self.model_path = model_path
         if self.action_space.discrete:
             head = nn.Softmax(dim=-1)
         else:
@@ -30,35 +31,39 @@ class PolicyGradient(Agent):
         self.episode_memory = Memory(columns)
         self.epoch_memory = Memory(columns)
 
-    def act(self, state: List) -> Tuple:
+    def act(self, state: List, train: bool = True) -> Tuple:
         state = torch.from_numpy(state).type(torch.FloatTensor)
         action_probs = self.model(state)
 
         distribution = self.action_space.distribution(action_probs)
         action = distribution.sample()
-        return action.data.numpy(), distribution.log_prob(action)
+        if train:
+            return action.data.numpy(), distribution.log_prob(action)
+        else:
+            return torch.argmax(action_probs).data.numpy(),
 
     def update(self) -> None:
-        logs_probs, cumulated_rewards = self.epoch_memory.get_columns(["log_probs", "cumulated_rewards"])
-        loss = - torch.sum(torch.mul(torch.stack(logs_probs), torch.Tensor(cumulated_rewards))) / self.epoch_episodes
-        print(f"Loss is {loss.item()}")
         self.optimizer.zero_grad()
+        logs_probs, cumulated_rewards = self.epoch_memory.get_columns(["log_probs", "cumulated_rewards"])
+        loss = - torch.mean(
+            torch.mul(torch.stack(logs_probs), torch.Tensor(cumulated_rewards)))
         loss.backward()
+        torch.nn.utils.clip_grad_norm_(self.model.parameters(), 1)
         self.optimizer.step()
         self.reset()
 
-    def save(self, model_path):
-        torch.save(self.model.state_dict(), model_path)
+    def save_model(self) -> None:
+        torch.save(self.model.state_dict(), self.model_path)
 
-    def load(self, model_path):
+    def load_model(self, model_path: str) -> None:
         self.model.load_state_dict(torch.load(model_path))
         self.model.eval()
 
-    def setup_schedulers(self, n_epochs: int):
-        scheduler = CosineAnnealingLR(self.optimizer, n_epochs, 0.01)
+    def setup_schedulers(self, n_epochs: int) -> None:
+        scheduler = CosineAnnealingLR(self.optimizer, n_epochs)
         self.schedulers.append(scheduler)
 
-    def cumulate_rewards(self):
+    def cumulate_rewards(self) -> None:
         cumulated_reward = 0
         cumulated_rewards = []
         rewards, = self.episode_memory.get_columns(["rewards"])

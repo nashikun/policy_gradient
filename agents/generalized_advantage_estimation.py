@@ -4,7 +4,7 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 from gym import Env
-from torch.optim.lr_scheduler import CosineAnnealingLR
+from torch.optim.lr_scheduler import ExponentialLR
 
 from agents.agent import Agent
 from utils.memory import Memory
@@ -13,11 +13,13 @@ from utils.mlp import MLP
 
 class GeneralizedAdvantageEstimation(Agent):
     def __init__(self, env: Env, policy_lr: float, value_lr: float, gamma: float = 0.99, falloff=0.99, value_iter=50,
-                 policy_layers=(128, 128), value_layers=(128, 128), verbose=False):
-        super().__init__(env, verbose)
+                 policy_layers=(128, 128), value_layers=(128, 128), verbose=False, save=True, policy_path=None,
+                 value_path=None):
+        super().__init__(env, verbose, save)
         self.gamma = gamma
         self.falloff = falloff
-
+        self.policy_path = policy_path
+        self.value_path = value_path
         if self.action_space.discrete:
             policy_head = nn.Softmax(dim=-1)
         else:
@@ -53,35 +55,36 @@ class GeneralizedAdvantageEstimation(Agent):
             value_loss = self.value_loss(values, torch.stack(cumulated_advantages))
             self.value_optimizer.zero_grad()
             value_loss.backward()
+            #torch.nn.utils.clip_grad_norm_(self.value_model.parameters(), 1)
             self.value_optimizer.step()
 
         print(f"Value Loss: {value_loss.item()}")
         # Compute the policy loss using th previous value function
-        policy_loss = - torch.sum(torch.mul(torch.stack(log_probs), torch.stack(cumulated_advantages)))
-        policy_loss /= self.epoch_episodes
+        policy_loss = - torch.mean(torch.mul(torch.stack(log_probs), torch.stack(cumulated_advantages)))
         print(f"Policy Loss: {policy_loss.item()}")
         self.policy_optimizer.zero_grad()
         policy_loss.backward()
+        #torch.nn.utils.clip_grad_norm_(self.policy_model.parameters(), 1)
         self.policy_optimizer.step()
         self.reset()
 
-    def save(self, policy_path, value_path):
-        torch.save(self.policy_model.state_dict(), policy_path)
-        torch.save(self.value_model.state_dict(), value_path)
+    def save_model(self) -> None:
+        torch.save(self.policy_model.state_dict(), self.policy_path)
+        torch.save(self.value_model.state_dict(), self.value_path)
 
-    def load(self, policy_path, value_path):
+    def load_model(self, policy_path, value_path) -> None:
         self.policy_model.load_state_dict(torch.load(policy_path))
         self.value_model.load_state_dict(torch.load(value_path))
         self.policy_model.eval()
         self.value_model.eval()
 
-    def setup_schedulers(self, n_epochs: int):
-        policy_scheduler = CosineAnnealingLR(self.policy_optimizer, n_epochs, eta_min=0)
-        value_scheduler = CosineAnnealingLR(self.value_optimizer, n_epochs, eta_min=0)
+    def setup_schedulers(self, n_epochs: int) -> None:
+        policy_scheduler = ExponentialLR(self.policy_optimizer, 0.97)
+        value_scheduler = ExponentialLR(self.value_optimizer, 0.97)
         self.schedulers.append(policy_scheduler)
         self.schedulers.append(value_scheduler)
 
-    def cumulate_rewards(self):
+    def cumulate_rewards(self) -> None:
         rewards, states, next_states = self.episode_memory.get_columns(["rewards", "states", "next_states"])
         with torch.no_grad():
             advantages = torch.Tensor(rewards) + self.gamma * (

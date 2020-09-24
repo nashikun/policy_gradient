@@ -7,25 +7,28 @@ from agents.agent import Agent
 
 class RandomAgent(Agent):
 
-    def act(self, state: torch.Tensor) -> Tuple:
+    def act(self, state: torch.Tensor, train: bool = True) -> Tuple:
         return self.action_space.sample(),
 
-    def update(self):
+    def update(self) -> None:
         pass
 
-    def save(self):
+    def save_model(self) -> None:
         pass
 
-    def store_step(self, *args):
+    def load_model(self) -> None:
         pass
 
-    def end_episode(self):
+    def store_step(self, *args) -> None:
         pass
 
-    def setup_schedulers(self, n_epochs: int):
+    def end_episode(self) -> None:
         pass
 
-    def cumulate_rewards(self):
+    def setup_schedulers(self, n_epochs: int) -> None:
+        pass
+
+    def cumulate_rewards(self) -> None:
         pass
 
     def setup_memory(self) -> None:
