@@ -55,7 +55,7 @@ class GeneralizedAdvantageEstimation(Agent):
             value_loss = self.value_loss(values, torch.stack(cumulated_advantages))
             self.value_optimizer.zero_grad()
             value_loss.backward()
-            #torch.nn.utils.clip_grad_norm_(self.value_model.parameters(), 1)
+            torch.nn.utils.clip_grad_norm_(self.value_model.parameters(), 1)
             self.value_optimizer.step()
 
         print(f"Value Loss: {value_loss.item()}")
@@ -64,7 +64,7 @@ class GeneralizedAdvantageEstimation(Agent):
         print(f"Policy Loss: {policy_loss.item()}")
         self.policy_optimizer.zero_grad()
         policy_loss.backward()
-        #torch.nn.utils.clip_grad_norm_(self.policy_model.parameters(), 1)
+        torch.nn.utils.clip_grad_norm_(self.policy_model.parameters(), 1)
         self.policy_optimizer.step()
         self.reset()
 

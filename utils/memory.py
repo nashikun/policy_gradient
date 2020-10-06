@@ -31,7 +31,7 @@ class Memory:
     def get_rows(self) -> List:
         return list(zip(self._storage[col] for col in self.columns))
 
-    def get_columns(self, columns):
+    def get_columns(self, columns) -> List[List]:
         return [self._storage[column] for column in columns]
 
     def get_batch(self, columns, batch=None):

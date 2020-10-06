@@ -1,6 +1,18 @@
 from typing import Tuple, Optional
 
+import torch
+import torch.nn.functional as F
 from torch import nn
+
+
+def mish(tensor):
+    return tensor * torch.tanh(F.softplus(tensor))
+
+
+class Mish(nn.Module):
+    def __init__(self): super().__init__()
+
+    def forward(self, tensor): return mish(tensor)
 
 
 class MLP(nn.Module):

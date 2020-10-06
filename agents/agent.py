@@ -27,8 +27,10 @@ class Agent(metaclass=ABCMeta):
         self.episode_memory.store(args)
 
     def end_episode(self) -> None:
-        self.episode_memory.normalize_columns(["rewards"])
+        # self.episode_memory.normalize_columns(["rewards"])
+        self.counter += 1
         self.cumulate_rewards()
+        # self.episode_memory.normalize_columns(["cumulated_rewards"])
         self.epoch_memory.extend(self.episode_memory)
         self.episode_memory.reset()
 
@@ -40,6 +42,7 @@ class Agent(metaclass=ABCMeta):
         self.setup_schedulers(n_epochs)
         best_reward = - np.inf
         history_rewards = []
+        losses = []
         for epoch in range(n_epochs):
             returned_rewards = []
             episode_steps = []
@@ -63,7 +66,9 @@ class Agent(metaclass=ABCMeta):
                 episode_steps.append(step + 1)
             history_rewards.extend(returned_rewards)
             mean_returned_rewards = np.mean(returned_rewards)
+            losses.extend(self.epoch_memory.get_columns(["loss"])[0])
             print("-" * 100 + f"\nEpoch {epoch + 1} / {n_epochs}: ")
+            print(f"Maximum returned reward: {np.max(returned_rewards)}")
             print(f"Average returned reward: {mean_returned_rewards}")
             print(f"Average episode length: {np.mean(episode_steps)}")
             if self.save and mean_returned_rewards > best_reward:
@@ -75,7 +80,7 @@ class Agent(metaclass=ABCMeta):
                 if self.verbose:
                     print(f"Scheduler {idx + 1}: {scheduler.get_lr()}")
         self.env.close()
-        return history_rewards
+        return history_rewards, [x.data.numpy() for x in losses]
 
     def evaluate(self, n_episodes: int, n_steps: int, render: bool) -> List[float]:
         returned_rewards = []
@@ -99,6 +104,16 @@ class Agent(metaclass=ABCMeta):
         print(f"Average reward: {np.mean(returned_rewards)}")
         self.env.close()
         return returned_rewards
+
+    @staticmethod
+    def get_max_grad(model):
+        ave_grads = []
+        layers = []
+        for n, p in model.named_parameters():
+            if p.requires_grad and ("bias" not in n):
+                layers.append(n)
+                ave_grads.append(p.grad.abs().mean())
+        return ave_grads
 
     @abstractmethod
     def cumulate_rewards(self):

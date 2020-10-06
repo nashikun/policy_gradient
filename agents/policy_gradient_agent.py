@@ -44,12 +44,12 @@ class PolicyGradient(Agent):
 
     def update(self) -> None:
         self.optimizer.zero_grad()
-        logs_probs, cumulated_rewards = self.epoch_memory.get_columns(["log_probs", "cumulated_rewards"])
-        loss = - torch.mean(
-            torch.mul(torch.stack(logs_probs), torch.Tensor(cumulated_rewards)))
+        loss, = self.epoch_memory.get_columns(["loss"])
+        loss = torch.mean(torch.stack(loss))
         loss.backward()
         torch.nn.utils.clip_grad_norm_(self.model.parameters(), 1)
         self.optimizer.step()
+        print(f"Value Loss: {loss.item()}")
         self.reset()
 
     def save_model(self) -> None:
@@ -66,8 +66,12 @@ class PolicyGradient(Agent):
     def cumulate_rewards(self) -> None:
         cumulated_reward = 0
         cumulated_rewards = []
-        rewards, = self.episode_memory.get_columns(["rewards"])
+        rewards, log_probs = self.episode_memory.get_columns(["rewards", "log_probs"])
         for i in range(len(rewards) - 1, -1, -1):
             cumulated_reward = self.gamma * cumulated_reward + rewards[i]
             cumulated_rewards.append(cumulated_reward)
-        self.episode_memory.extend_column("cumulated_rewards", cumulated_rewards[::-1])
+
+        cumulated_rewards = cumulated_rewards[::-1]
+        loss = - torch.sum(torch.mul(torch.stack(log_probs), torch.Tensor(cumulated_rewards)))
+        self.episode_memory.append_column("loss", loss)
+        self.episode_memory.extend_column("cumulated_rewards", cumulated_rewards)

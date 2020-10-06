@@ -1,10 +1,13 @@
 import argparse
 import ast
+import random
 from typing import List
 
 import gym
 import matplotlib.pyplot as plt
 import pandas as pd
+import torch
+import numpy as np
 
 from agents.actor_critic import ActorCritic
 from agents.generalized_advantage_estimation import GeneralizedAdvantageEstimation
@@ -26,7 +29,7 @@ def setup_parser() -> argparse.ArgumentParser:
                         required=False)
     parser.add_argument('--save', type=ast.literal_eval, help="Whether to save the model", default=True,
                         required=False)
-    parser.add_argument('--load', type=ast.literal_eval, help="Whether to load the model", default=True,
+    parser.add_argument('--load', type=ast.literal_eval, help="Whether to load the model", default=False,
                         required=False)
     parser.add_argument('--verbose', type=ast.literal_eval, help="Whether to print extra details", default=False,
                         required=False)
@@ -40,7 +43,7 @@ def setup_parser() -> argparse.ArgumentParser:
     ac_gae_parent = argparse.ArgumentParser(add_help=False)
     ac_gae_parent.add_argument('--value_iter', type=int, default=50)
     ac_gae_parent.add_argument('--policy_lr', type=float, help="The policy learning rate", default=0.01, required=False)
-    ac_gae_parent.add_argument('--value_lr', type=float, help="The value learning rate", default=0.05, required=False)
+    ac_gae_parent.add_argument('--value_lr', type=float, help="The value learning rate", default=0.01, required=False)
     ac_gae_parent.add_argument('--policy_layers', nargs='+', type=int, default=[128, 128])
     ac_gae_parent.add_argument('--value_layers', nargs='+', type=int, default=[128, 128])
     ac_gae_parent.add_argument('--policy_model_path', type=str, help="The policy model path",
@@ -77,14 +80,12 @@ def get_configs(args):
     return model_config, train_config, load_config
 
 
-def plot_uncertainty(input_series: List[float]):
-    fig, ax = plt.subplots()
-    steps = list(range(len(input_series) - 100))
-    series = pd.Series(input_series).rolling(100)
-    means = series.mean()[100:]
-    stds = series.std()[100:]
-    ax.plot(steps, means)
-    ax.fill_between(steps, means - stds, means + stds, alpha=0.5)
+def plot_rewards(input_series: List[float], window=100):
+    plt.plot(input_series)
+    ret = np.cumsum(input_series, dtype=float)
+    ret[window:] = ret[window:] - ret[:-window]
+    moving_average = ret[window-1:] / window
+    plt.plot(moving_average)
     plt.show()
 
 
@@ -93,6 +94,7 @@ def main():
     args = parser.parse_args()
     env = gym.make(args.env)
     model_type = args.model
+
     if not model_type:
         raise ValueError("Please specify the model")
 
@@ -110,11 +112,11 @@ def main():
     if args.load:
         model.load_model(**load_config)
     if args.train:
-        reward_history = model.train(**train_config)
-        plot_uncertainty(reward_history)
+        reward_history, loss = model.train(**train_config)
+        plot_rewards(reward_history)
     if args.evaluate:
         model.evaluate(n_episodes=10, n_steps=1000, render=args.render)
-        # plot_uncertainty(evaluation_results)
+        plot_rewards(evaluation_results)
     # plt.plot(model.loss_history)
 
 

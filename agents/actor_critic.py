@@ -4,7 +4,7 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 from gym import Env
-from torch.optim.lr_scheduler import CosineAnnealingLR
+from torch.optim.lr_scheduler import CosineAnnealingLR, ExponentialLR
 
 from agents.agent import Agent
 from utils.memory import Memory
@@ -31,10 +31,11 @@ class ActorCritic(Agent):
         self.value_optimizer = optim.Adam(self.value_model.parameters(), lr=value_lr)
         self.value_loss = nn.MSELoss()
         self.reset()
+        self.counter = 0
         self.value_iter = value_iter
 
     def setup_memory(self) -> None:
-        columns = ["states", "next_states", "actions", "log_probs", "rewards"]
+        columns = ["states", "next_states", "actions", "log_probs", "rewards", "done"]
         self.episode_memory = Memory(columns)
         self.epoch_memory = Memory(columns)
 
@@ -49,30 +50,29 @@ class ActorCritic(Agent):
             return torch.argmax(action_probs).data.numpy(),
 
     def update(self) -> None:
-        states, next_states, rewards, cumulated_rewards, log_probs = self.epoch_memory.get_columns(
-            ["states", "next_states", "rewards", "cumulated_rewards", "log_probs"])
+        states, next_states, rewards, cumulated_rewards, log_probs, done = self.epoch_memory.get_columns(
+            ["states", "next_states", "rewards", "cumulated_rewards", "log_probs", "done"])
         # Compute the advantge for the previous Value function
-        # TODO multiplu by the done mask
         with torch.no_grad():
-            advantages = torch.Tensor(rewards) + (
-                    self.gamma * self.value_model(torch.Tensor(next_states)) - self.value_model(
-                torch.Tensor(states))).squeeze()
+            advantages = torch.Tensor(rewards) + (self.gamma * (1 - torch.tensor(done, dtype=int)) * self.value_model(
+                torch.Tensor(next_states)).squeeze() - self.value_model(torch.Tensor(states)).squeeze())
 
         # Train the value function a cetrain number of iterations
-        for _ in range(self.value_iter):
+        for _ in range(int(self.value_iter) + 1):
             values = self.value_model(torch.Tensor(states)).squeeze()
             value_loss = self.value_loss(values, torch.Tensor(cumulated_rewards))
             self.value_optimizer.zero_grad()
             value_loss.backward()
-            torch.nn.utils.clip_grad_norm_(self.value_model.parameters(), 0.5)
+            torch.nn.utils.clip_grad_norm_(self.value_model.parameters(), 1)
             self.value_optimizer.step()
+        self.value_iter *= 0.95
         print(f"Value Loss: {value_loss.item()}")
         # Compute the policy loss using th previous value function
-        policy_loss = - torch.mean(torch.mul(torch.stack(log_probs), advantages))
+        policy_loss = - torch.sum(torch.mul(torch.stack(log_probs), advantages)) / self.counter
         print(f"Policy Loss: {policy_loss.item()}")
         self.policy_optimizer.zero_grad()
         policy_loss.backward()
-        # torch.nn.utils.clip_grad_norm_(self.policy_model.parameters(), 0.5)
+        torch.nn.utils.clip_grad_norm_(self.policy_model.parameters(), 1)
         self.policy_optimizer.step()
         self.reset()
 
@@ -80,15 +80,15 @@ class ActorCritic(Agent):
         torch.save(self.policy_model.state_dict(), self.policy_path)
         torch.save(self.value_model.state_dict(), self.value_path)
 
-    def load_model(self) -> None:
-        self.policy_model.load_state_dict(torch.load(self.policy_path))
-        self.value_model.load_state_dict(torch.load(self.value_path))
+    def load_model(self, policy_path: str, value_path: str) -> None:
+        self.policy_model.load_state_dict(torch.load(policy_path))
+        self.value_model.load_state_dict(torch.load(value_path))
         self.policy_model.eval()
         self.value_model.eval()
 
     def setup_schedulers(self, n_epochs: int) -> None:
-        policy_scheduler = CosineAnnealingLR(self.policy_optimizer, n_epochs, eta_min=0)
-        value_scheduler = CosineAnnealingLR(self.value_optimizer, n_epochs, eta_min=0)
+        policy_scheduler = ExponentialLR(self.policy_optimizer, 0.97)
+        value_scheduler = ExponentialLR(self.value_optimizer, 0.97)
         self.schedulers.append(policy_scheduler)
         self.schedulers.append(value_scheduler)
 
